@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Canvas Editor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap');
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #1a202c;
+            color: white;
+        }
+        canvas {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-4">
+
+    <!-- Header -->
+    <header class="mb-8 text-center">
+        <h1 class="text-3xl md:text-5xl font-bold text-blue-400 mb-2">Image Canvas Studio</h1>
+        <p class="text-gray-400">Upload karein, Edit karein, aur Canvas ka magic dekhein</p>
+    </header>
+
+    <!-- Main Container -->
+    <div class="bg-gray-800 p-6 rounded-xl shadow-2xl w-full max-w-4xl flex flex-col md:flex-row gap-6">
+        
+        <!-- Controls Panel -->
+        <div class="w-full md:w-1/3 flex flex-col gap-4 order-2 md:order-1">
+            
+            <!-- Upload Section -->
+            <div class="bg-gray-700 p-4 rounded-lg text-center border-2 border-dashed border-gray-500 hover:border-blue-400 transition-colors cursor-pointer relative">
+                <input type="file" id="imageInput" accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                <i class="fas fa-cloud-upload-alt text-3xl text-blue-400 mb-2"></i>
+                <p class="text-sm font-semibold">Image Select Karein</p>
+                <p class="text-xs text-gray-400">Click or Drag & Drop</p>
+            </div>
+
+            <!-- Filters -->
+            <div class="bg-gray-700 p-4 rounded-lg space-y-4" id="controls" style="opacity: 0.5; pointer-events: none;">
+                <h3 class="font-semibold text-lg border-b border-gray-600 pb-2">Filters</h3>
+                
+                <div>
+                    <label class="flex justify-between text-sm mb-1">Brightness <span id="val-brightness">100%</span></label>
+                    <input type="range" id="brightness" min="0" max="200" value="100" class="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer">
+                </div>
+
+                <div>
+                    <label class="flex justify-between text-sm mb-1">Contrast <span id="val-contrast">100%</span></label>
+                    <input type="range" id="contrast" min="0" max="200" value="100" class="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer">
+                </div>
+
+                <div>
+                    <label class="flex justify-between text-sm mb-1">Grayscale <span id="val-grayscale">0%</span></label>
+                    <input type="range" id="grayscale" min="0" max="100" value="0" class="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer">
+                </div>
+                
+                <div>
+                    <label class="flex justify-between text-sm mb-1">Blur <span id="val-blur">0px</span></label>
+                    <input type="range" id="blur" min="0" max="10" value="0" step="0.5" class="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer">
+                </div>
+
+                <div class="flex gap-2 mt-4">
+                    <button id="resetBtn" class="flex-1 bg-red-500 hover:bg-red-600 text-white py-2 rounded transition shadow">
+                        <i class="fas fa-undo mr-1"></i> Reset
+                    </button>
+                    <button id="downloadBtn" class="flex-1 bg-green-500 hover:bg-green-600 text-white py-2 rounded transition shadow">
+                        <i class="fas fa-download mr-1"></i> Save
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Canvas Display -->
+        <div class="w-full md:w-2/3 bg-black rounded-lg flex items-center justify-center overflow-hidden relative min-h-[300px] border border-gray-700 order-1 md:order-2">
+            <p id="placeholderText" class="text-gray-500 absolute pointer-events-none">
+                <i class="fas fa-image text-4xl mb-2 block text-center"></i>
+                No Image Loaded
+            </p>
+            <canvas id="canvas" class="max-w-full max-h-full object-contain hidden"></canvas>
+        </div>
+    </div>
+
+    <script>
+        const imageInput = document.getElementById('imageInput');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const placeholderText = document.getElementById('placeholderText');
+        const controlsDiv = document.getElementById('controls');
+        
+        // Filter Inputs
+        const brightnessInput = document.getElementById('brightness');
+        const contrastInput = document.getElementById('contrast');
+        const grayscaleInput = document.getElementById('grayscale');
+        const blurInput = document.getElementById('blur');
+        const resetBtn = document.getElementById('resetBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+
+        let originalImage = new Image();
+        let imageLoaded = false;
+
+        // Load Image
+        imageInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    originalImage.src = event.target.result;
+                    originalImage.onload = () => {
+                        // Set canvas dimensions to match image but limit max size for performance
+                        const maxWidth = 800;
+                        const scale = Math.min(1, maxWidth / originalImage.width);
+                        
+                        canvas.width = originalImage.width * scale;
+                        canvas.height = originalImage.height * scale;
+                        
+                        drawImage();
+                        
+                        // UI Updates
+                        imageLoaded = true;
+                        canvas.classList.remove('hidden');
+                        placeholderText.classList.add('hidden');
+                        controlsDiv.style.opacity = '1';
+                        controlsDiv.style.pointerEvents = 'auto';
+                        
+                        // Reset filters on new image load
+                        resetFilters();
+                    }
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        function drawImage() {
+            if (!imageLoaded) return;
+
+            // Apply filters using CSS filter syntax context
+            const brightness = brightnessInput.value;
+            const contrast = contrastInput.value;
+            const grayscale = grayscaleInput.value;
+            const blur = blurInput.value;
+
+            // Update Labels
+            document.getElementById('val-brightness').innerText = `${brightness}%`;
+            document.getElementById('val-contrast').innerText = `${contrast}%`;
+            document.getElementById('val-grayscale').innerText = `${grayscale}%`;
+            document.getElementById('val-blur').innerText = `${blur}px`;
+
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Save context to apply filters
+            ctx.save();
+            
+            // Construct filter string
+            ctx.filter = `brightness(${brightness}%) contrast(${contrast}%) grayscale(${grayscale}%) blur(${blur}px)`;
+            
+            // Draw image
+            ctx.drawImage(originalImage, 0, 0, canvas.width, canvas.height);
+            
+            ctx.restore();
+        }
+
+        function resetFilters() {
+            brightnessInput.value = 100;
+            contrastInput.value = 100;
+            grayscaleInput.value = 0;
+            blurInput.value = 0;
+            drawImage();
+        }
+
+        // Event Listeners for sliders
+        [brightnessInput, contrastInput, grayscaleInput, blurInput].forEach(input => {
+            input.addEventListener('input', drawImage);
+        });
+
+        resetBtn.addEventListener('click', resetFilters);
+
+        // Download logic
+        downloadBtn.addEventListener('click', () => {
+            if (!imageLoaded) return;
+            const link = document.createElement('a');
+            link.download = 'edited-image.png';
+            link.href = canvas.toDataURL();
+            link.click();
+        });
+
+        // Add support for drag and drop
+        const uploadZone = document.querySelector('.border-dashed');
+        
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            uploadZone.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            uploadZone.addEventListener(eventName, () => uploadZone.classList.add('border-blue-400', 'bg-gray-600'), false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            uploadZone.addEventListener(eventName, () => uploadZone.classList.remove('border-blue-400', 'bg-gray-600'), false);
+        });
+
+        uploadZone.addEventListener('drop', (e) => {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            
+            if (files.length > 0) {
+                imageInput.files = files; // Assign to input
+                // Trigger change event manually
+                const event = new Event('change');
+                imageInput.dispatchEvent(event);
+            }
+        });
+
+    </script>
+</body>
+</html>
